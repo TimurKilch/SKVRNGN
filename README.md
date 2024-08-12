@@ -11,7 +11,7 @@ or
 make setup
 ```
 
-### Run:
+### Run app:
 ```bash
 python main.py path_to_MEDICAL.GDB path_to_MKB10.GDB path_to_results.csv
 ```
