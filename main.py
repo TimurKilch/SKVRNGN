@@ -1,10 +1,8 @@
-"""Process medical and MKB10 databases and export study results to a CSV file."""
-
 import argparse
 import csv
-
 import fdb
-
+import os
+import shutil
 
 def fetch_study_results(database_path_medical, database_path_mkb10):  # noqa: WPS210
     """
@@ -43,18 +41,18 @@ def fetch_study_results(database_path_medical, database_path_mkb10):  # noqa: WP
     cur_mkb10.execute('SELECT MKB_VALUES FROM MKB10')
     for row in cur_mkb10.fetchall():
         mkb_value = row[0].split(' ')[0]
-        mkb10_values[mkb_value] = row[0]        
+        mkb10_values[mkb_value] = row[0]
     select_command = """
             SELECT I.IMAGE_NAME, S.STUDY_UID 
             FROM IMAGES I 
             JOIN SERIES S ON I.SERIES_UID = S.SERIES_UID
         """
-    cur_medical.execute(select_command)        
+    cur_medical.execute(select_command)
     for row in cur_medical.fetchall():
         image_name = str(row[0])
         study_uid = str(row[1]).strip()
         if study_uid in study_results:
-            image_names[study_uid] = image_name    
+            image_names[study_uid] = image_name
     con_medical.close()
     con_mkb10.close()
 
@@ -88,6 +86,51 @@ def write_study_results_to_csv(study_results, mkb10_values, image_names, output_
             })
 
 
+def update_medical_database(database_path_medical, output_filename):
+    """
+    Remove specified columns from the 'patients' table in the medical database and save the updated database.
+
+    Args:
+        database_path_medical (str): Path to the medical database.
+        output_filename (str): Name of the resulting updated database file.
+    """
+    # Создание копии базы данных с новым именем
+    new_database_path = os.path.join(os.path.dirname(output_filename), 'Medical_update.gdb')
+    shutil.copyfile(database_path_medical, new_database_path)
+
+    # Подключение к новой базе данных
+    con_medical = fdb.connect(
+        dsn=new_database_path,
+        user='sysdba',
+        password='masterkey',
+        charset='UTF8',
+    )
+    cur_medical = con_medical.cursor()
+
+    # Удаление индексов, которые мешают удалению столбцов
+    indices_to_remove = ['PAT_IDX1', 'PAT_IDX2', 'PAT_IDX3']
+    for index in indices_to_remove:
+        cur_medical.execute(f'DROP INDEX {index}')
+        con_medical.commit()
+
+    # Удаление указанных столбцов из таблицы 'patients'
+    columns_to_remove = [
+        'PATIENT_NAME', 
+        'PATIENT_NAME_R', 
+        'PATIENT_CASE_HISTORY_NUMBER', 
+        'PATIENT_ADDRESS_REGION', 
+        'PATIENT_ADDRESS_AREA', 
+        'PATIENT_ADDRESS_CITY', 
+        'PATIENT_ADDRESS_SHF', 
+        'PATIENT_NAME_STD'
+    ]
+    for column in columns_to_remove:
+        cur_medical.execute(f'ALTER TABLE patients DROP {column}')
+        con_medical.commit()
+
+    # Закрытие подключения
+    con_medical.close()
+
 def main():
     """
     Parse arguments and process the databases.
@@ -104,12 +147,16 @@ def main():
 
     args = parser.parse_args()
 
+    # Fetch and process study results
     study_results, mkb10_values, image_names = fetch_study_results(
         args.database_path_medical, args.database_path_mkb10,
     )
     write_study_results_to_csv(
         study_results, mkb10_values, image_names, args.output_filename,
     )
+
+    # Update the medical database by removing the 'patients' table
+    update_medical_database(args.database_path_medical, args.output_filename)
 
 
 if __name__ == '__main__':
