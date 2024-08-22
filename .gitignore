@@ -2,4 +2,5 @@ venv/
 .vscode/
 DB/
 results.csv
+results/
 .idea

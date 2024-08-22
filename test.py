@@ -37,3 +37,4 @@ def print_table_columns(database_path_medical):
 # Usage example
 database_path_medical = './Medical_update.gdb'
 print_table_columns(database_path_medical)
+
