@@ -4,3 +4,4 @@ DB/
 results.csv
 results/
 .idea
+__pycache__

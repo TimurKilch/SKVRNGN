@@ -4,6 +4,7 @@ import fdb
 import os
 import shutil
 from pydicom import dcmread
+from check_health import validate_system
 
 def fetch_study_results(database_path_medical, database_path_mkb10):
     con_medical = fdb.connect(
@@ -136,6 +137,8 @@ def main():
     parser.add_argument('database_path_medical', type=str, help='Path to the medical database')
     parser.add_argument('database_path_mkb10', type=str, help='Path to the MKB10 database')
     parser.add_argument('output_dir', type=str, help='Directory to save the results (CSV, GDB, and images)')
+
+    validate_system()  # Info about sys
 
     args = parser.parse_args()
 
