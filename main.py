@@ -41,14 +41,15 @@ def fetch_study_results(database_path_medical, database_path_mkb10):
         """
     cur_medical.execute(select_command)
     for row in cur_medical.fetchall():
-        image_name = str(row[0])
+        image_path = str(row[0])
+        print(image_path)
         study_uid = str(row[1]).strip()
 
         if study_uid in study_results:
             if study_uid in image_names:
-                image_names[study_uid].append(image_name)
+                image_names[study_uid].append(image_path)
             else:
-                image_names[study_uid] = [image_name]
+                image_names[study_uid] = [image_path]
     con_medical.close()
     con_mkb10.close()
 
@@ -121,14 +122,16 @@ def process_dicom_file(dicom_file_path, output_file_path):
 
 
 def copy_images_and_process_dicom(image_names, database_path_medical, output_dir):
-    base_dir = os.path.dirname(database_path_medical)
+    if os.path.isabs(database_path_medical):
+        base_dir = ""
+    else:
+        base_dir = os.path.dirname(database_path_medical)
 
     for study_uid, images in image_names.items():
         for image in images:
             original_image_path = os.path.join(base_dir, image)
             output_image_path = os.path.join(output_dir, image)
             process_dicom_file(original_image_path, output_image_path)
-
 
 def main():
     parser = argparse.ArgumentParser(
