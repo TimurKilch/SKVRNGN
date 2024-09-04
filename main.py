@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Настройка логирования
+os.makedirs('logs', exist_ok=True)
 logging.basicConfig(
     filename=f'logs\\medical_data_processing_{datetime.now().strftime("%d_%m_%Y_%H_%M_%S")}.log',
     level=logging.INFO,

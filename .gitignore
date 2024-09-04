@@ -6,3 +6,8 @@ results/
 .idea
 __pycache__
 logs/*
+
+# exe's
+build
+dist
+svkvrngn.spec
