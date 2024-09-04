@@ -5,3 +5,4 @@ results.csv
 results/
 .idea
 __pycache__
+logs/*
