@@ -247,6 +247,7 @@ def copy_images_and_process_dicom(image_names, database_path_medical, output_dir
 
     for study_uid, images in image_names.items():
         for image_path in images:
+            pure_path = image_path
             if os.path.isabs(image_path):
                 output_image_path = os.path.join(output_dir, image_path)
                 output_image_path = replace_drive_with_folder(output_image_path, os.path.join(output_dir, 'images'))
@@ -256,7 +257,10 @@ def copy_images_and_process_dicom(image_names, database_path_medical, output_dir
                 output_image_path = os.path.join(prefix_dir, image_path)
 
                 image_path = os.path.join(os.path.dirname(database_path_medical), image_path)
-            process_dicom_file(image_path, output_image_path)
+            try:
+                process_dicom_file(image_path, output_image_path)
+            except Exception as E:
+                logging.warning(f'Не найден или недоступен файл {pure_path}')
 
 
 def browse_file(entry):
