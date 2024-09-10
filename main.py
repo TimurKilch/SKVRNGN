@@ -1,4 +1,5 @@
-import argparse
+import tkinter as tk
+from tkinter import filedialog, messagebox
 import csv
 import fdb
 import os
@@ -9,13 +10,16 @@ from check_health import validate_system
 from datetime import datetime
 from pathlib import Path
 
-# Настройка логирования
-os.makedirs('logs', exist_ok=True)
-logging.basicConfig(
-    filename=f'logs\\medical_data_processing_{datetime.now().strftime("%d_%m_%Y_%H_%M_%S")}.log',
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+
+def logging_setup(output_dir):
+    # Настройка логирования
+    os.makedirs(os.path.join(output_dir, 'logs'), exist_ok=True)
+    logging.basicConfig(
+        filename=os.path.join(output_dir,
+                              f'logs\\medical_data_processing_{datetime.now().strftime("%d_%m_%Y_%H_%M_%S")}.log'),
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
 
 
 def get_all_columns(database_path):
@@ -135,7 +139,7 @@ def fetch_study_results(database_path_medical, database_path_mkb10):
     return study_results, mkb10_values, image_names
 
 
-def write_study_results_to_csv(study_results, mkb10_values, image_names, output_filename):
+def write_study_results_to_csv(study_results, mkb10_values, image_names, output_filename, output_dir):
     fields = ['Image Name', 'Study UID', 'Study Result', 'MKB Description']
     with open(output_filename, 'w', encoding='utf-8') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fields)
@@ -145,8 +149,18 @@ def write_study_results_to_csv(study_results, mkb10_values, image_names, output_
             diagnosis_code = study_result.split(' ')[0]
             mkb_description = mkb10_values.get(diagnosis_code, 'Description not found')
             image_name = image_names.get(study_uid, 'Not found')
+
+            new_image_paths = []
+            for image_path in image_name:
+                if os.path.isabs(image_path):
+                    # Если путь абсолютный, меняем диск на images
+                    new_image_path = replace_drive_with_folder(image_path, 'images')
+                    new_image_paths.append(new_image_path)
+                else:
+                    # Если относительный, то добавляем в начало images
+                    new_image_paths.append(os.path.join('images', image_path))
             writer.writerow({
-                'Image Name': image_name,
+                'Image Name': new_image_paths,
                 'Study UID': study_uid,
                 'Study Result': study_result,
                 'MKB Description': mkb_description,
@@ -193,12 +207,19 @@ def update_medical_database(database_path_medical, output_dir):
     for image in images:
         original_image_path = str(image[0])
         if os.path.isabs(original_image_path):
-            # Если путь абсолютный, меняем диск на output_dir/images
-            new_image_path = replace_drive_with_folder(original_image_path, os.path.join(output_dir, 'images'))
+            # Если путь абсолютный, меняем диск на images
+            new_image_path = replace_drive_with_folder(original_image_path, 'images')
             # Обновляем базу данных новым путем
-            cur_medical.execute(f"UPDATE IMAGES SET IMAGE_PATH = ? WHERE IMAGE_PATH = ?", (new_image_path, original_image_path))
+            cur_medical.execute(f"UPDATE IMAGES SET IMAGE_PATH = ? WHERE IMAGE_PATH = ?",
+                                (new_image_path, original_image_path))
             con_medical.commit()
-
+        else:
+            # Если относительнный, до добавляем в начало images
+            new_image_path = os.path.join('images', original_image_path)
+            # Обновляем базу данных новым путем
+            cur_medical.execute(f"UPDATE IMAGES SET IMAGE_PATH = ? WHERE IMAGE_PATH = ?",
+                                (new_image_path, original_image_path))
+            con_medical.commit()
     con_medical.close()
 
 
@@ -222,56 +243,94 @@ def replace_drive_with_folder(input_path, new_folder):
 
 
 def copy_images_and_process_dicom(image_names, database_path_medical, output_dir):
-    if os.path.isabs(database_path_medical):
-        base_dir = ""
-    else:
-        base_dir = os.path.dirname(database_path_medical)
+    # base_dir = os.path.dirname(database_path_medical)
 
     for study_uid, images in image_names.items():
-        for image in images:
-            original_image_path = os.path.join(base_dir, image)
-            output_image_path = os.path.join(output_dir, image)
+        for image_path in images:
+            if os.path.isabs(image_path):
+                output_image_path = os.path.join(output_dir, image_path)
+                output_image_path = replace_drive_with_folder(output_image_path, os.path.join(output_dir, 'images'))
+            else:
+                # Если относительные, то надо добавить путь по папки в которой лежит База
+                prefix_dir = os.path.join(output_dir, 'images')
+                output_image_path = os.path.join(prefix_dir, image_path)
 
-            # Т.к у нас здесь абсолютные пути, меняем том на путь до output_dir/images/
-            # Т.е. том(диск) на output_dir/images
-            output_image_path = replace_drive_with_folder(output_image_path, output_dir)
-
-            process_dicom_file(original_image_path, output_image_path)
+                image_path = os.path.join(os.path.dirname(database_path_medical), image_path)
+            process_dicom_file(image_path, output_image_path)
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description='Process medical databases and export study results to a CSV file.',
-    )
-    parser.add_argument('database_path_medical', type=str, help='Path to the medical database')
-    parser.add_argument('database_path_mkb10', type=str, help='Path to the MKB10 database')
-    parser.add_argument('output_dir', type=str, help='Directory to save the results (CSV, GDB, and images)')
+def browse_file(entry):
+    file_path = filedialog.askopenfilename()
+    if file_path:
+        entry.delete(0, tk.END)
+        entry.insert(0, file_path)
 
+
+def browse_directory(entry):
+    dir_path = filedialog.askdirectory()
+    if dir_path:
+        entry.delete(0, tk.END)
+        entry.insert(0, dir_path)
+
+
+def start_processing():
+    medical_db_path = entry_medical_db.get()
+    mkb10_db_path = entry_mkb10_db.get()
+    output_dir = entry_output_dir.get()
+
+    if not os.path.exists(medical_db_path) or not os.path.exists(mkb10_db_path):
+        messagebox.showerror("Ошибка", "Указанные пути к файлам не существуют.")
+        return
+
+    if not os.path.isdir(output_dir):
+        messagebox.showerror("Ошибка", "Указанный путь для сохранения результатов не является директорией.")
+        return
+
+    # Запуск всех функций для обработки
     validate_system()  # Info about sys
 
-    args = parser.parse_args()
+    os.makedirs(output_dir, exist_ok=True)
 
-    os.makedirs(args.output_dir, exist_ok=True)
+    logging_setup(output_dir)
+    log_columns_for_database(medical_db_path, "Medical Database")
+    log_columns_for_database(mkb10_db_path, "MKB10 Database")
 
-    # Логирование столбцов для обеих баз данных
-    log_columns_for_database(args.database_path_medical, "Medical Database")
-    log_columns_for_database(args.database_path_mkb10, "MKB10 Database")
-
-    # Основная обработка данных
     study_results, mkb10_values, image_names = fetch_study_results(
-        args.database_path_medical, args.database_path_mkb10,
+        medical_db_path, mkb10_db_path,
     )
 
-    output_csv_path = os.path.join(args.output_dir, 'results.csv')
+    output_csv_path = os.path.join(output_dir, 'results.csv')
     write_study_results_to_csv(
-        study_results, mkb10_values, image_names, output_csv_path,
+        study_results, mkb10_values, image_names, output_csv_path, output_dir
     )
 
-    update_medical_database(args.database_path_medical, args.output_dir)
-    copy_images_and_process_dicom(image_names, args.database_path_medical, args.output_dir)
+    update_medical_database(medical_db_path, output_dir)
+    copy_images_and_process_dicom(image_names, medical_db_path, output_dir)
 
-    print("Processing completed. Check the log file for details on missing MKB codes.")
+    messagebox.showinfo("Успех", "Обработка данных завершена. Проверьте журнал для получения деталей.")
 
 
-if __name__ == '__main__':
-    main()
+root = tk.Tk()
+root.title("Обработка медицинских данных")
+
+# Поля для ввода путей с предзаполненными значениями
+
+tk.Label(root, text="Путь к базе данных Medical:").grid(row=0, column=0, padx=5, pady=5)
+entry_medical_db = tk.Entry(root, width=50)
+entry_medical_db.grid(row=0, column=1, padx=5, pady=5)
+tk.Button(root, text="Обзор", command=lambda: browse_file(entry_medical_db)).grid(row=0, column=2, padx=5, pady=5)
+
+tk.Label(root, text="Путь к базе данных MKB10:").grid(row=1, column=0, padx=5, pady=5)
+entry_mkb10_db = tk.Entry(root, width=50)
+entry_mkb10_db.grid(row=1, column=1, padx=5, pady=5)
+tk.Button(root, text="Обзор", command=lambda: browse_file(entry_mkb10_db)).grid(row=1, column=2, padx=5, pady=5)
+
+tk.Label(root, text="Директория для сохранения результатов:").grid(row=2, column=0, padx=5, pady=5)
+entry_output_dir = tk.Entry(root, width=50)
+entry_output_dir.grid(row=2, column=1, padx=5, pady=5)
+tk.Button(root, text="Обзор", command=lambda: browse_directory(entry_output_dir)).grid(row=2, column=2, padx=5, pady=5)
+
+# Кнопка для запуска обработки
+tk.Button(root, text="Запуск", command=start_processing).grid(row=3, column=1, pady=20)
+
+root.mainloop()

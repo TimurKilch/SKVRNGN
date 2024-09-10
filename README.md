@@ -11,6 +11,8 @@ or
 make setup
 ```
 
+### Do not run program and save several databases into one directory!!!
+
 ### Run app:
 ```bash
 python main.py path_to_MEDICAL.GDB path_to_MKB10.GDB path_to_results_dir

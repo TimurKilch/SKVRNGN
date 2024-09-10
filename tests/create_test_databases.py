@@ -67,13 +67,13 @@ def create_test_database_with_mixed_paths(original_db_path, new_db_path, path_pr
 
 if __name__ == '__main__':
     # Путь к оригинальной базе данных
-    original_db_path = 'DB/MEDICAL.GDB'
+    original_db_path = '../DB/MEDICAL.GDB'
     # Путь к новой базе данных с абсолютными путями
-    new_db_path_abs = 'DB/MEDICAL_ABS.GDB'
+    new_db_path_abs = '../DB/MEDICAL_ABS.GDB'
     # Путь к новой базе данных с 50% абсолютных и 50% относительных путей
-    new_db_path_mixed = 'DB/MEDICAL_MIXED.GDB'
+    new_db_path_mixed = '../DB/MEDICAL_MIXED.GDB'
     # Префикс для добавления к относительным путям ИЗМЕНИТЬ ПОД СЕБЯ
-    path_prefix = r'C:\Users\usenk\PycharmProjects\SKVRNGN\DB'
+    path_prefix = r'/DB'
 
     # Создание базы данных с абсолютными путями
     create_test_database_with_absolute_paths(original_db_path, new_db_path_abs, path_prefix)
