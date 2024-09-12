@@ -1,14 +1,16 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
+
 import csv
 import fdb
 import os
 import shutil
 import logging
-from pydicom import dcmread
-from check_health import validate_system
 from datetime import datetime
-from pathlib import Path
+
+from check_health import validate_system
+from anonymization_utils import anonymize_dicom_file
+from path_utils import replace_drive_with_folder
 
 
 def logging_setup(output_dir):
@@ -167,81 +169,6 @@ def write_study_results_to_csv(study_results, mkb10_values, image_names, output_
             })
 
 
-def update_medical_database(database_path_medical, output_dir):
-    new_database_path = os.path.join(output_dir, 'Medical_update.gdb')
-    shutil.copyfile(database_path_medical, new_database_path)
-
-    con_medical = fdb.connect(
-        dsn=new_database_path,
-        user='sysdba',
-        password='masterkey',
-        charset='UTF8',
-    )
-    cur_medical = con_medical.cursor()
-
-    # Удаление индексов
-    indices_to_remove = ['PAT_IDX1', 'PAT_IDX2', 'PAT_IDX3']
-    for index in indices_to_remove:
-        cur_medical.execute(f'DROP INDEX {index}')
-        con_medical.commit()
-
-    # Удаление ненужных столбцов
-    columns_to_remove = [
-        'PATIENT_NAME',
-        'PATIENT_NAME_R',
-        'PATIENT_CASE_HISTORY_NUMBER',
-        'PATIENT_ADDRESS_REGION',
-        'PATIENT_ADDRESS_AREA',
-        'PATIENT_ADDRESS_CITY',
-        'PATIENT_ADDRESS_SHF',
-        'PATIENT_NAME_STD'
-    ]
-    for column in columns_to_remove:
-        cur_medical.execute(f'ALTER TABLE patients DROP {column}')
-        con_medical.commit()
-
-    # Обновление путей изображений, если они абсолютные
-    cur_medical.execute("SELECT IMAGE_PATH FROM IMAGES")
-    images = cur_medical.fetchall()
-
-    for image in images:
-        original_image_path = str(image[0])
-        if os.path.isabs(original_image_path):
-            # Если путь абсолютный, меняем диск на images
-            new_image_path = replace_drive_with_folder(original_image_path, 'images')
-            # Обновляем базу данных новым путем
-            cur_medical.execute(f"UPDATE IMAGES SET IMAGE_PATH = ? WHERE IMAGE_PATH = ?",
-                                (new_image_path, original_image_path))
-            con_medical.commit()
-        else:
-            # Если относительнный, до добавляем в начало images
-            new_image_path = os.path.join('images', original_image_path)
-            # Обновляем базу данных новым путем
-            cur_medical.execute(f"UPDATE IMAGES SET IMAGE_PATH = ? WHERE IMAGE_PATH = ?",
-                                (new_image_path, original_image_path))
-            con_medical.commit()
-    con_medical.close()
-
-
-def process_dicom_file(dicom_file_path, output_file_path):
-    dicom_data = dcmread(dicom_file_path)
-
-    if 'PatientName' in dicom_data:
-        dicom_data.PatientName = 'Anonymous'
-
-    if 'PatientID' in dicom_data:
-        dicom_data.PatientID = '00000000'
-
-    os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
-    dicom_data.save_as(output_file_path)
-
-
-def replace_drive_with_folder(input_path, new_folder):
-    # Создаем объект пути и заменяем корень на новую папку
-    new_path = Path(new_folder) / Path(*Path(input_path).parts[1:])
-    return str(new_path)
-
-
 def copy_images_and_process_dicom(image_names, database_path_medical, output_dir):
     # base_dir = os.path.dirname(database_path_medical)
 
@@ -258,7 +185,7 @@ def copy_images_and_process_dicom(image_names, database_path_medical, output_dir
 
                 image_path = os.path.join(os.path.dirname(database_path_medical), image_path)
             try:
-                process_dicom_file(image_path, output_image_path)
+                anonymize_dicom_file(image_path, output_image_path)
             except Exception as E:
                 logging.warning(f'Не найден или недоступен файл {pure_path}')
 

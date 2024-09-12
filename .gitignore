@@ -1,6 +1,7 @@
 venv/ 
 .vscode/
 DB/
+PURE_DB/
 results.csv
 results/
 .idea

@@ -26,5 +26,5 @@ def display_image_paths(database_path_medical):
 
 if __name__ == "__main__":
     # Пример использования функции
-    database_path_medical = "../results/Medical_update.gdb"
+    database_path_medical = "../DB/MEDICAL.GDB"
     display_image_paths(database_path_medical)
